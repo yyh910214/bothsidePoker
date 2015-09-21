@@ -13,12 +13,19 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.example.discard.TimeServerHandler;
+import io.netty.handler.codec.string.StringDecoder;
+import io.netty.handler.codec.string.StringEncoder;
+import io.netty.util.CharsetUtil;
+
+import com.apolloners.poker.handler.BothSidePokerServerHandler;
+import com.apolloners.poker.handler.DataOutputStreamEncoder;
+import com.apolloners.poker.handler.StringMessageDecoder;
+import com.apolloners.poker.room.WaitingRoom;
 
 public class BothSidePokerServer {
 	
 	public static void main(String[] args) throws Exception	{
-		int port = 20304;
+		int port = 20202;
 		if(args.length > 0)	{
 			port = Integer.parseInt(args[0]);
 		}
@@ -33,7 +40,9 @@ public class BothSidePokerServer {
 			.childHandler(new ChannelInitializer<SocketChannel>() {
 				 @Override
 				 public void initChannel(SocketChannel ch) throws Exception	{
-					 ch.pipeline().addLast(new TimeServerHandler());
+					 ch.pipeline().addLast("stringDecoder", new StringMessageDecoder());
+					 ch.pipeline().addLast(new BothSidePokerServerHandler());
+					 ch.pipeline().addLast("stringEncode", new DataOutputStreamEncoder());
 				 }
 			})
 			.option(ChannelOption.SO_BACKLOG, 128)

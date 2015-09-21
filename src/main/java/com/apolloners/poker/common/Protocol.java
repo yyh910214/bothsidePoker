@@ -9,4 +9,5 @@ public enum Protocol {
 	NAME, CREATE, JOIN, REFRESH, EXIT, START, READY, FINISH, ATTACK, DEFENSE, END
 	, SHUFFLE
 	, BET
+	, DIE
 }

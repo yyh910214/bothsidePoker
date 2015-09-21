@@ -5,9 +5,14 @@
  */
 package com.apolloners.poker.game;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.apolloners.poker.vo.Card;
 
 public class Deck {
+	
+	private static Logger logger = LoggerFactory.getLogger(Deck.class);
 	private Card[] cards;
 	private int index;
 
@@ -27,7 +32,7 @@ public class Deck {
 				j = 2;
 			}
 
-			for (; j <= 10; ++j) {
+			for (; j <= 10; j+=2) {
 				Card card = new Card();
 				card.setFront(i);
 				card.setBack(j);
@@ -47,6 +52,8 @@ public class Deck {
 			cards[source] = cards[target];
 			cards[target] = temp;
 		}
+		
+		logger.info("Card Shuffle is done");
 	}
 	
 	public Card nextCard()	{

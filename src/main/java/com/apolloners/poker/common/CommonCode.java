@@ -22,5 +22,8 @@ public class CommonCode {
 	public static final String BACK = "BACK";
 	public static final String DUAL = "DUAL";
 	
+	public static final String CALL = "CALL";
+	public static final String DIE = "DIE";
+	
 	public static final String ID = "ID";
 }

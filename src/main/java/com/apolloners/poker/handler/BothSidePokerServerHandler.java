@@ -6,10 +6,13 @@
 package com.apolloners.poker.handler;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.util.ReferenceCountUtil;
 
+import java.net.InetSocketAddress;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
@@ -23,14 +26,17 @@ import com.apolloners.poker.vo.Client;
 
 public class BothSidePokerServerHandler extends ChannelInboundHandlerAdapter {
 
-	protected Logger logger = LoggerFactory.getLogger(this.getClass());
+	protected static final Logger logger = LoggerFactory.getLogger(BothSidePokerServerHandler.class);
 
-	private WaitingRoom waitingRoom;
-	private ConcurrentHashMap<String, Client> clientMap;
+	private static WaitingRoom waitingRoom;
+	private static ConcurrentHashMap<String, Client> clientMap;
+	
+	static {
+		waitingRoom = new WaitingRoom();
+		clientMap = new ConcurrentHashMap<String, Client>();
+	}
 
 	public BothSidePokerServerHandler() {
-		// TODO Auto-generated constructor stub
-		clientMap = new ConcurrentHashMap<String, Client>();
 	}
 
 	public BothSidePokerServerHandler(WaitingRoom waitingRoom) {
@@ -52,12 +58,21 @@ public class BothSidePokerServerHandler extends ChannelInboundHandlerAdapter {
 		client.setChannel(ctx.channel());
 		enterWaitingRoom(client);
 
-		clientMap.put(ctx.name(), client);
+		clientMap.put(((InetSocketAddress)ctx.channel().remoteAddress()).toString(), client);
 		// 성공 메시지 전송
-		ByteBuf success = ctx.alloc().buffer();
-		success.writeBytes(CommonCode.SUCCESS.toString().getBytes());
 		
-		client.getChannel().writeAndFlush(success);
+		final ChannelFuture f = client.getChannel().writeAndFlush(CommonCode.SUCCESS);
+		
+		f.addListener(new ChannelFutureListener() {
+			
+			@Override
+			public void operationComplete(ChannelFuture future) throws Exception {
+				assert f == future;
+				logger.debug("send is success");
+			}
+		});
+		
+		logger.info("Client is Registerd");
 	}
 
 	public void enterWaitingRoom(Client client) {
@@ -75,16 +90,14 @@ public class BothSidePokerServerHandler extends ChannelInboundHandlerAdapter {
 	@Override
 	public void channelRead(ChannelHandlerContext ctx, Object msg)
 			throws Exception {
-		ByteBuf in = (ByteBuf) msg;
-		// StringBuilder sb = new StringBuilder();
-		String input;
+//		ByteBuf in = (ByteBuf) msg;
+//		 StringBuilder sb = new StringBuilder();
 		try {
-			// while (in.isReadable()) {
-			// sb.append((char)in.readChar());
-			// }
-			input = in.toString();
+//			 while (in.isReadable()) {
+//				 sb.append((char)in.readByte());
+//			 }
 
-			action(clientMap.get(ctx.name()), input);
+			action(clientMap.get(((InetSocketAddress)ctx.channel().remoteAddress()).toString()), (String)msg);
 		} finally {
 			ReferenceCountUtil.release(msg);
 		}
@@ -105,6 +118,12 @@ public class BothSidePokerServerHandler extends ChannelInboundHandlerAdapter {
 	}
 
 	protected void action(Client client, String message) {
+		if(client == null)	{
+			logger.debug("client is null");
+		}
+		logger.debug(client.getUserId());
+		logger.debug(client.getUserId() + "send message : " + message);
+		logger.debug(message);
 		String[] messages = message.split("\\|");
 		switch (Protocol.valueOf(messages[0])) {
 		case NAME:
@@ -127,11 +146,12 @@ public class BothSidePokerServerHandler extends ChannelInboundHandlerAdapter {
 			break;
 		case START:
 			client.getGameRoom().startGame();
-		case BET:
-			client.getGameRoom().bet();
 			break;
-		case DEFENSE:
-			client.getGameRoom().defense();
+		case BET:
+			client.getGameRoom().doBet(client, messages[1], Integer.parseInt(messages[2]));
+			break;
+		case DIE:
+			client.getGameRoom().doDie(client);
 			break;
 		}
 	}

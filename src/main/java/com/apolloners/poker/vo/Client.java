@@ -6,10 +6,13 @@
 package com.apolloners.poker.vo;
 
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.apolloners.poker.common.CommonCode;
 import com.apolloners.poker.room.GameRoom;
 import com.apolloners.poker.room.WaitingRoom;
 
@@ -81,6 +84,19 @@ public class Client {
 	 */
 	public void setWaitingRoom(WaitingRoom waitingRoom) {
 		this.waitingRoom = waitingRoom;
+	}
+	
+	public void write(final String message)	{
+		final ChannelFuture f = channel.writeAndFlush(message);
+		
+		f.addListener(new ChannelFutureListener() {
+			
+			@Override
+			public void operationComplete(ChannelFuture future) throws Exception {
+				assert f == future;
+				logger.debug(userId + " send : " + message);
+			}
+		});
 	}
 	
 }
