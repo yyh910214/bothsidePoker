@@ -41,6 +41,7 @@ public class GameRoom {
 	private PokerGameInfo masterGameInfo, guestGameInfo;
 
 	private Deck deck;
+	private int gameChip;
 
 	private boolean playing;
 	private boolean playOrder; // true : master first, false : guest first
@@ -102,16 +103,17 @@ public class GameRoom {
 			first = this.master;
 			second = this.guest;
 
-			this.masterGameInfo.setCard(deck.nextCard());
 			this.guestGameInfo.setCard(deck.nextCard());
+			this.masterGameInfo.setCard(deck.nextCard());
 		} else {
 			first = this.guest;
 			second = this.master;
 
-			this.guestGameInfo.setCard(deck.nextCard());
 			this.masterGameInfo.setCard(deck.nextCard());
+			this.guestGameInfo.setCard(deck.nextCard());
 		}
 
+		initInfo();
 		this.master.write(
 				Protocol.SHUFFLE.name() + CommonCode.DELIMITER
 						+ masterGameInfo.getCard().getFront()
@@ -134,6 +136,16 @@ public class GameRoom {
 		first.write(Protocol.ATTACK.name());
 	}
 
+	public void initInfo()	{
+		this.masterGameInfo.setTurnChip(0);
+		this.guestGameInfo.setTurnChip(0);
+		
+		this.masterGameInfo.addTurnChip(1);
+		this.guestGameInfo.addTurnChip(1);
+		
+		this.masterGameInfo.setBetType("");
+		this.guestGameInfo.setBetType("");
+	}
 	public void doBet(Client client, String betType, int chip) {
 		Client otherClient;
 		PokerGameInfo info, otherInfo;
@@ -147,23 +159,31 @@ public class GameRoom {
 			otherInfo = masterGameInfo;
 		}
 
-		if (info.getBetType() == null) {
+		if (info.getBetType() == "") {
 			info.setBetType(betType);
 		}
 		
 		info.addTurnChip(chip);
 		
+		otherClient.write(
+				Protocol.TURNINFO.name() + CommonCode.DELIMITER
+						+ info.getBetType() + CommonCode.DELIMITER + chip);
+		
 		// CALL일경우
 		if(info.getTurnChip() == otherInfo.getTurnChip())	{
-			if(getWinnerGameInfo(info, otherInfo) == info)	{
+			PokerGameInfo winnerInfo = getWinnerGameInfo(info, otherInfo);
+			if(winnerInfo == info)	{
+				logger.debug("Client win");
 				sendFinish(client, otherClient, CommonCode.CALL);
-			} else	{
+			} else if(winnerInfo == otherInfo){
+				logger.debug("other win");
 				sendFinish(otherClient, client, CommonCode.CALL);
+			} else	{
+				logger.debug("draw");
+				sendFinish(master, guest, CommonCode.DRAW);
 			}
 		} else	{
-			otherClient.write(
-					Protocol.DEFENSE.name() + CommonCode.DELIMITER
-							+ info.getBetType() + CommonCode.DELIMITER + chip);
+			otherClient.write(Protocol.ATTACK.name());
 		}
 
 		
@@ -175,25 +195,32 @@ public class GameRoom {
 		int cardNumber = info.getBettingCardNumber();
 		int otherCardNumber = otherInfo.getBettingCardNumber();
 		
+		logger.debug(info.getBetType() + " cardNumber : " + cardNumber + ", infoBack : " + info.getCard().getBack() + ", infoFront : " + info.getCard().getFront());
+		logger.debug(otherInfo.getBetType() + " otherNumber : " + otherCardNumber + ", otherBack : " + otherInfo.getCard().getBack() + ", toherFront : " + otherInfo.getCard().getFront());
+		
 		if(cardNumber < 0)	{
+			info.addTurnChip(info.getTurnChip()-1);
 			if(info.getCard().getBack() > otherCardNumber
 					&& info.getCard().getFront() > otherCardNumber)	{
 				// 양면 배팅 승리.
 				otherInfo.addTurnChip(10);
 				winnerInfo = info;
+				logger.debug("info Dual Win");
 			} else	{
-				info.addTurnChip(info.getTurnChip());
 				winnerInfo = otherInfo;
+				logger.debug("info dual lose");
 			}
 		} else if(otherCardNumber < 0)	{
+			otherInfo.addTurnChip(otherInfo.getTurnChip()-1);
 			if(otherInfo.getCard().getBack() > cardNumber
 					&& otherInfo.getCard().getFront() > cardNumber)	{
 				// 양면 배팅 승리.
 				info.addTurnChip(10);
 				winnerInfo = otherInfo;
+				logger.debug("other dual win");
 			} else	{
-				otherInfo.addTurnChip(otherInfo.getTurnChip());
 				winnerInfo = info;
+				logger.debug("other dual lose");
 			}
 		} else	{
 			if(cardNumber < otherCardNumber)	{
@@ -221,11 +248,18 @@ public class GameRoom {
 			otherInfo = this.masterGameInfo;
 		}
 		
-		if(otherInfo.getBetType() == CommonCode.DUAL)	{
+		otherClient.write(
+				Protocol.TURNINFO.name() + CommonCode.DELIMITER
+						+ CommonCode.DIE + CommonCode.DELIMITER + 0);
+		
+		if(otherInfo.getBetType().equals(CommonCode.DUAL))	{
 			info.addTurnChip(10);
+			otherInfo.addTurnChip(otherInfo.getTurnChip()-1);
 			// 상대가 양면 배팅일 때 다이한 경우 10개를 추가로 잃음.
-		} else if(info.getBetType() == CommonCode.DUAL)	{
-			info.addTurnChip(info.getTurnChip());
+			logger.debug("DIE DUAL1");
+		} else if(info.getBetType().equals(CommonCode.DUAL))	{
+			info.addTurnChip(info.getTurnChip()-1);
+			logger.debug("DIE DUAL2");
 			// 양면 배팅인 상태로 다이할 경우 칩 2배 잃음
 		}
 		
@@ -236,28 +270,52 @@ public class GameRoom {
 	 * Send the Finish Message
 	 */
 	public void sendFinish(Client winner, Client loser, String type)	{
-		if(winner == master)	{
-			playOrder = true;
-		} else 	{
-			playOrder = false;
-		}
-		
-		winner.write(Protocol.FINISH + CommonCode.DELIMITER
-				+ type + CommonCode.DELIMITER
-				+ CommonCode.WIN + CommonCode.DELIMITER
-				+ (masterGameInfo.getTurnChip() + guestGameInfo.getTurnChip()));
-		
-		loser.write(Protocol.FINISH + CommonCode.DELIMITER
-				+ type + CommonCode.DELIMITER
-				+ CommonCode.LOSE + CommonCode.DELIMITER
-				+ 0);
-		
-		if(masterGameInfo.getChip() == 0
-				|| guestGameInfo.getChip() == 0)	{
-			doGameEnd();
-		} else	{
+		gameChip += (masterGameInfo.getTurnChip() + guestGameInfo.getTurnChip());
+		if(type.equals(CommonCode.DRAW))	{
+			logger.debug("master chip : " + masterGameInfo.getChip() + ", guest chip : " + guestGameInfo.getChip());
+			logger.debug("DRAW");
+			
+			winner.write(Protocol.FINISH + CommonCode.DELIMITER
+					+ type + CommonCode.DELIMITER
+					+ CommonCode.DRAW + CommonCode.DELIMITER
+					+ gameChip);
+			
+			loser.write(Protocol.FINISH + CommonCode.DELIMITER
+					+ type + CommonCode.DELIMITER
+					+ CommonCode.DRAW + CommonCode.DELIMITER
+					+ gameChip);
+			
 			doTurnStart();
+		} else	{
+			if(winner == master)	{
+				playOrder = true;
+				masterGameInfo.increaseChip(gameChip);
+			} else 	{
+				playOrder = false;
+				guestGameInfo.increaseChip(gameChip);
+			}
+			
+			winner.write(Protocol.FINISH + CommonCode.DELIMITER
+					+ type + CommonCode.DELIMITER
+					+ CommonCode.WIN + CommonCode.DELIMITER
+					+ gameChip);
+			
+			loser.write(Protocol.FINISH + CommonCode.DELIMITER
+					+ type + CommonCode.DELIMITER
+					+ CommonCode.LOSE + CommonCode.DELIMITER
+					+ gameChip);
+			
+			gameChip = 0;
+			logger.debug("master chip : " + masterGameInfo.getChip() + ", guest chip : " + guestGameInfo.getChip());
+			
+			if(masterGameInfo.getChip() <= 0
+					|| guestGameInfo.getChip() <= 0)	{
+				doGameEnd();
+			} else	{
+				doTurnStart();
+			}
 		}
+		
 	}
 
 	

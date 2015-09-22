@@ -5,6 +5,8 @@
  */
 package com.apolloners.poker.vo;
 
+import org.apache.commons.lang.StringUtils;
+
 import com.apolloners.poker.common.CommonCode;
 
 public class PokerGameInfo {
@@ -40,7 +42,7 @@ public class PokerGameInfo {
 	 * @return the betType
 	 */
 	public String getBetType() {
-		return betType;
+		return betType == null ? "" : betType;
 	}
 	/**
 	 * @param betType the betType to set
@@ -60,6 +62,7 @@ public class PokerGameInfo {
 	 * @return the turnChip
 	 */
 	public int getTurnChip() {
+		System.out.println(turnChip);
 		return turnChip;
 	}
 	/**
@@ -79,9 +82,9 @@ public class PokerGameInfo {
 	 * DUAL일 경우 -1 리턴
 	 */
 	public int getBettingCardNumber()	{
-		if(betType == CommonCode.BACK)	{
+		if(betType.equals(CommonCode.BACK))	{
 			return card.getBack();
-		} else if(betType == CommonCode.FRONT)	{
+		} else if(betType.equals(CommonCode.FRONT))	{
 			return card.getFront();
 		} else	{
 			return -1;

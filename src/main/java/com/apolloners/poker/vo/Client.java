@@ -94,7 +94,7 @@ public class Client {
 			@Override
 			public void operationComplete(ChannelFuture future) throws Exception {
 				assert f == future;
-				logger.debug(userId + " send : " + message);
+				logger.debug(message + "has been sended to " + userId);
 			}
 		});
 	}
